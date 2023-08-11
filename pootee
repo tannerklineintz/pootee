@@ -35,9 +35,14 @@ command line usage:
 class pootee:
     def __init__(self) -> None:
         ''' class interfacing pootee functionality '''
-        is_windows: bool = 'win' in sys.platform
-        connections_file: str = os.path.expanduser("~")
-        connections_file += '\\connections.json' if is_windows else '/connections.json'
+        args = self._get_args()
+
+        if args.connection_file:
+            connections_file: str = args.connection_file
+        else:
+            is_windows: bool = 'win' in sys.platform
+            connections_file: str = os.path.expanduser("~")
+            connections_file += '\\connections.json' if is_windows else '/connections.json'
         self.connections_file: Path = Path(connections_file)
 
         self.connections: t.Dict[str, t.Dict[str, t.Any]] = {}
@@ -47,7 +52,6 @@ class pootee:
 
         if len(sys.argv) == 1:
             self.execute_ui()
-
         else:
             self.execute_cli()
 
@@ -59,8 +63,12 @@ class pootee:
             formatter_class=RawTextHelpFormatter
         )
 
+        self.parser.add_argument('--connection-file','-f', 
+            action='store', required=False, default=None,
+            help='Connection json file to use (default ~/connections.json)')
+
         self.parser.add_argument('--action','-a', 
-            action='store', required=True, default=None, 
+            action='store', required=False, default=None, 
             help='Action to take, options are "c", "add", "del", "id", or "list"')
 
         self.parser.add_argument('--connection', '-c',
@@ -102,25 +110,35 @@ class pootee:
         tunnel: str = ""
         pemkey: str = ""
 
-        if choice == 'add':
+        if choice == 'c':
+            ip: str = self._safe_input('ip > ')
+            uname: str = self._safe_input('username > ')
+            port: str = self._safe_input('port > ')
+            tunnel: str = self._safe_input('tunnel > ')
+            pemkey: str = self._safe_input('pem key > ')
+            if ip is "" or uname is "":
+                print('> ERROR: connect requires (connection) or (ip, username)')
+                sys.exit(1)
+
+        elif choice == 'add':
             name: str = self._safe_input('name > ')
             ip: str = self._safe_input('ip > ')
             uname: str = self._safe_input('username > ')
             port: str = self._safe_input('port > ')
             tunnel: str = self._safe_input('tunnel > ')
             pemkey: str = self._safe_input('pem key > ')
+            if name is "" or ip is "" or uname is "":
+                print('> ERROR: add requires (connection name, ip, username)')
+                sys.exit(1)
 
         elif choice == 'del':
             name: str = self._safe_input('connection > ')
-
-        elif choice == 'c':
-            ip: str = self._safe_input('ip > ')
-            uname: str = self._safe_input('username > ')
-            port: str = self._safe_input('port > ')
-            tunnel: str = self._safe_input('tunnel > ')
-            pemkey: str = self._safe_input('pem key > ')
+            if name is "":
+                print('> ERROR: add requires connection name')
+                sys.exit(1)
 
         self.execute(
+            is_cli=False,
             choice=choice, 
             name=name,
             ip=ip,
@@ -131,8 +149,10 @@ class pootee:
         )
 
 
-    def execute_cli(self):
-        args = self._get_args()
+    def execute_cli(self, args: argparse.Namespace):
+        if not args.action:
+            print('> ERROR: no action specified')
+            sys.exit(1)
 
         choice: str = args.action
         name: str = ""
@@ -153,12 +173,12 @@ class pootee:
                 name: str = args.connection
             else:
                 print('> ERROR: connect requires (connection) or (ip, username)')
-                sys.exit(0)
+                sys.exit(1)
             
         elif choice == 'add':
             if not (choice.conn_name and choice.ip and choice.username):
                 print('> ERROR: add requires (connection name, ip, username)')
-                return
+                sys.exit(1)
             name: str = args.connection
             ip: str = args.ip
             uname: str = args.uname
@@ -169,10 +189,11 @@ class pootee:
         elif choice == 'del':
             if not choice.connection:
                 print('> ERROR: delete requires connection name')
-                return
+                sys.exit(1)
             name: str = choice.connection
 
         self.execute(
+            is_cli=True,
             choice=choice, 
             name=name,
             ip=ip,
@@ -183,7 +204,8 @@ class pootee:
         )
 
 
-    def execute(self, choice: str, 
+    def execute(self, is_cli: bool, 
+                choice: str, 
                 name: str = "", 
                 ip: str = "", 
                 uname: str = "", 
@@ -232,8 +254,12 @@ class pootee:
             return
 
         else:
-            conn = self._find_conn(choice)
-            connection = self.connections[conn]
+            if is_cli:
+                print('> ERROR: Invalid action')
+                sys.exit(1)
+            else:
+                conn = self._find_conn(choice)
+                connection = self.connections[conn]
 
         tunnel, port, pemkey = '', '', ''
         if 'tunnel' in self.connections[conn]:
