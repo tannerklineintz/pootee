@@ -1,0 +1,318 @@
+import typing as t
+import os
+import json
+import argparse
+from argparse import RawTextHelpFormatter
+import sys
+from pathlib import Path
+
+desc: str = '''
+ -- pootee - version 1.0 --
+Pootee is a command line ssh tool made my Tanner Kline. 
+It can be controlled using command line arguments, or via user interface. 
+
+command line usage:
+  listing all connections
+      pootee --action list
+  resetting connection ids (reset to 0-N)
+      pootee --action id
+  adding a connection
+      pootee --action add --connection asdf --ip 0.0.0.0 --username tanner --port 223 --tunnel 8890:localhost:8890
+      - If port is not specified, default is used.
+      - If tunnel is not specified, there will be no tunnel.
+  deleting a connection
+      pootee --action del --connection tbc2
+      - You can also optionally use the connection id to delete
+  connecting to connection
+      pootee --action c --connection tbc2
+      - You can also optionally use the connection id to connect
+  connecting directly to system
+      pootee --action c --ip 0.0.0.0 --username tanner --port 223 --tunnel 8890:localhost:8890
+      - If port is not specified, default is used.
+      - If tunnel is not specified, there will be no tunnel.
+'''
+
+class pootee:
+    def __init__(self) -> None:
+        ''' class interfacing pootee functionality '''
+        is_windows: bool = 'win' in sys.platform
+        connections_file: str = os.path.expanduser("~")
+        connections_file += '\\connections.json' if is_windows else '/connections.json'
+        self.connections_file: Path = Path(connections_file)
+
+        self.connections: t.Dict[str, t.Dict[str, t.Any]] = {}
+        if self.connections_file.exists():
+            with open(self.connections_file, 'r') as f:
+                self.connections: t.Dict[str, t.Dict[str, t.Any]] = json.load(f)
+
+        if len(sys.argv) == 1:
+            self.execute_ui()
+
+        else:
+            self.execute_cli()
+
+
+    def _get_args(self) -> argparse.Namespace:
+        ''' parses command line arguments for CLI mode '''
+        self.parser = argparse.ArgumentParser(
+            description=desc,
+            formatter_class=RawTextHelpFormatter
+        )
+
+        self.parser.add_argument('--action','-a', 
+            action='store', required=True, default=None, 
+            help='Action to take, options are "c", "add", "del", "id", or "list"')
+
+        self.parser.add_argument('--connection', '-c',
+            action='store', required=False, default=None,
+            help='Connection name/id to perform action on')
+
+        self.parser.add_argument('--ip', '-i',
+            action='store', required=False, default=None,
+            help='IP address of connection to perform action on')
+        self.parser.add_argument('--username', '-u',
+            action='store', required=False, default=None,
+            help='Username for connection to perform action on')
+        self.parser.add_argument('--port', '-p',
+            action='store', required=False, default=None,
+            help='Port for connection to perform action on')
+        self.parser.add_argument('--tunnel', '-t',
+            action='store', required=False, default=None,
+            help='Tunnel for connection to perform action on')
+        self.parser.add_argument('--pem-key', '-k',
+            action='store', required=False, default=None,
+            help='Tunnel for connection to perform action on')
+
+        return self.parser.parse_args()
+    
+
+    def execute_ui(self):
+        self._print_header()
+        self._list_conns()
+
+        choice: str = self._safe_input('choice > ')
+        if not choice:
+            print(' goodbye! :)')
+            sys.exit(0)
+
+        name: str = ""
+        ip: str = ""
+        uname: str = ""
+        port: str = ""
+        tunnel: str = ""
+        pemkey: str = ""
+
+        if choice == 'add':
+            name: str = self._safe_input('name > ')
+            ip: str = self._safe_input('ip > ')
+            uname: str = self._safe_input('username > ')
+            port: str = self._safe_input('port > ')
+            tunnel: str = self._safe_input('tunnel > ')
+            pemkey: str = self._safe_input('pem key > ')
+
+        elif choice == 'del':
+            name: str = self._safe_input('connection > ')
+
+        elif choice == 'c':
+            ip: str = self._safe_input('ip > ')
+            uname: str = self._safe_input('username > ')
+            port: str = self._safe_input('port > ')
+            tunnel: str = self._safe_input('tunnel > ')
+            pemkey: str = self._safe_input('pem key > ')
+
+        self.execute(
+            choice=choice, 
+            name=name,
+            ip=ip,
+            uname=uname,
+            port=port,
+            tunnel=tunnel,
+            pemkey=pemkey
+        )
+
+
+    def execute_cli(self):
+        args = self._get_args()
+
+        choice: str = args.action
+        name: str = ""
+        ip: str = ""
+        uname: str = ""
+        port: str = ""
+        tunnel: str = ""
+        pemkey: str = ""
+
+        if choice == 'c':
+            if args.ip and args.username:
+                ip: str = args.ip
+                uname: str = args.username
+                port: str = args.port if args.port else ""
+                tunnel: str = args.tunnel if choice.tunnel else ""
+                pemkey: str = args.pem_key if choice.pem_key else ""
+            elif args.connection:
+                name: str = args.connection
+            else:
+                print('> ERROR: connect requires (connection) or (ip, username)')
+                sys.exit(0)
+            
+        elif choice == 'add':
+            if not (choice.conn_name and choice.ip and choice.username):
+                print('> ERROR: add requires (connection name, ip, username)')
+                return
+            name: str = args.connection
+            ip: str = args.ip
+            uname: str = args.uname
+            port: str = args.port if choice.port else ""
+            tunnel: str = args.tunnel if choice.tunnel else ""
+            port: str = args.pem_key if choice.pem_key else ""
+
+        elif choice == 'del':
+            if not choice.connection:
+                print('> ERROR: delete requires connection name')
+                return
+            name: str = choice.connection
+
+        self.execute(
+            choice=choice, 
+            name=name,
+            ip=ip,
+            uname=uname,
+            port=port,
+            tunnel=tunnel,
+            pemkey=pemkey
+        )
+
+
+    def execute(self, choice: str, 
+                name: str = "", 
+                ip: str = "", 
+                uname: str = "", 
+                port: str = "", 
+                tunnel: str = "", 
+                pemkey: str= ""):
+        if choice == 'add':
+            self._add_connection(name, ip, uname, port, tunnel, pemkey)
+
+            self.dump_conns()
+            print('> VM added! goodbye!')
+            return
+        
+        elif choice == 'del':
+            conn = self._find_conn(name)
+            
+            del self.connections[conn]
+            self.dump_conns()
+            print('> VM deleted! goodbye!')
+            return
+
+        elif choice == 'c':
+            if name:
+                connection = self.connections[name]
+            else:
+                connection = {}
+                connection['ip'] = ip
+                connection['uname'] = uname
+                if port != '':
+                    connection['port'] = port
+                if tunnel != '':
+                    connection['tunnel'] = tunnel
+                if pemkey != '':
+                    connection['pemkey'] = pemkey
+
+        elif choice == 'id':
+            for i, k in enumerate(self.connections.keys(), 1):
+                self.connections[k]['id'] = i
+
+            self.dump_conns()
+            print("> id's re-assigned! goodbye!")
+            return
+        
+        elif choice == 'list':
+            self._list_conns()
+            return
+
+        else:
+            conn = self._find_conn(choice)
+            connection = self.connections[conn]
+
+        tunnel, port, pemkey = '', '', ''
+        if 'tunnel' in self.connections[conn]:
+            tunnel: str = f'-L {self.connections[conn]["tunnel"]}' 
+        if 'port' in self.connections[conn]:
+            port: str = f'-p {self.connections[conn]["port"]}'
+        if 'pemkey' in self.connections[conn]:
+            pemkey: str = f'-i {self.connections[conn]["pemkey"]}'
+
+        self.ssh(
+            tunnel=tunnel, 
+            port=port, 
+            pemkey=pemkey, 
+            username=self.connections[conn]["uname"], 
+            host=self.connections[conn]["ip"]
+        )
+        
+
+    def _add_connection(self, name: str, ip: str, uname: str, port: str, tunnel: str, pemkey: str):
+        ''' adds connection to connection dict '''
+        if name not in self.connections.values():
+            self.connections[name] = {}
+            self.connections[name]['id'] = len(self.connections)
+
+        self.connections[name]['ip'] = ip
+        self.connections[name]['uname'] = uname
+        if port != '':
+            self.connections[name]['port'] = port
+        if tunnel != '':
+            self.connections[name]['tunnel'] = tunnel
+        if pemkey != '':
+            self.connections[name]['pemkey'] = pemkey
+
+
+    def _find_conn(self, choice: str) -> str:
+            if choice.isdigit():
+                for k,v in self.connections.items():
+                    if v['id'] == int(choice):
+                        return k
+            else:
+                return self.connections[choice]
+            
+
+    def _safe_input(self, text: str) -> t.Any:
+        try:
+            return input(text)
+        except (EOFError, KeyboardInterrupt):
+            print(' goodbye! :)')
+            sys.exit(0)
+
+
+    def _list_conns(self):
+        print(48*'#')
+        for k,v in self.connections.items():
+            line = f'# {v["id"]}: {k}'
+            print(line + (47-len(line))*' ' + '#')
+        print(48*'#')
+
+
+    def _print_header(self):
+        print("#################### POOTEE ####################")
+        print(48*'#')
+        print('# - Enter the connection id or the connection  #')
+        print('#   name to connect to system                  #')
+        print('# - Enter "add" to add a new connection        #')
+        print('# - Enter "del" to delete a connection         #')
+        print('# - Enter "c" to connect without saving        #')
+        print('# - Enter "id" to re-assign connection id\'s    #')
+
+
+    def dump_conns(self):
+        with open(self.connections_file, 'w') as f:
+            json.dump(self.connections, f)
+
+
+    def ssh(self, tunnel, port, pemkey, username, host):
+        os.system(f'ssh {tunnel} {port} {pemkey} {username}@{host}')
+
+
+
+if __name__ == '__main__':
+    pootee()
