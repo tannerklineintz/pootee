@@ -262,19 +262,19 @@ class pootee:
                 connection = self.connections[conn]
 
         tunnel, port, pemkey = '', '', ''
-        if 'tunnel' in self.connections[conn]:
-            tunnel: str = f'-L {self.connections[conn]["tunnel"]}' 
-        if 'port' in self.connections[conn]:
-            port: str = f'-p {self.connections[conn]["port"]}'
-        if 'pemkey' in self.connections[conn]:
-            pemkey: str = f'-i {self.connections[conn]["pemkey"]}'
+        if 'tunnel' in connection:
+            tunnel: str = f'-L {connection["tunnel"]}' 
+        if 'port' in connection:
+            port: str = f'-p {connection["port"]}'
+        if 'pemkey' in connection:
+            pemkey: str = f'-i {connection["pemkey"]}'
 
         self.ssh(
             tunnel=tunnel, 
             port=port, 
             pemkey=pemkey, 
-            username=self.connections[conn]["uname"], 
-            host=self.connections[conn]["ip"]
+            username=connection["uname"], 
+            host=connection["ip"]
         )
         
 
