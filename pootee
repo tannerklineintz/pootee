@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import typing as t
 import os
 import json
@@ -116,7 +117,7 @@ class pootee:
             port: str = self._safe_input('port > ')
             tunnel: str = self._safe_input('tunnel > ')
             pemkey: str = self._safe_input('pem key > ')
-            if ip is "" or uname is "":
+            if ip == "" or uname == "":
                 print('> ERROR: connect requires (connection) or (ip, username)')
                 sys.exit(1)
 
@@ -127,13 +128,13 @@ class pootee:
             port: str = self._safe_input('port > ')
             tunnel: str = self._safe_input('tunnel > ')
             pemkey: str = self._safe_input('pem key > ')
-            if name is "" or ip is "" or uname is "":
+            if name == "" or ip == "" or uname == "":
                 print('> ERROR: add requires (connection name, ip, username)')
                 sys.exit(1)
 
         elif choice == 'del':
             name: str = self._safe_input('connection > ')
-            if name is "":
+            if name == "":
                 print('> ERROR: add requires connection name')
                 sys.exit(1)
 
